@@ -23,6 +23,21 @@ angular.module('todomvc', ['ngRoute', 'ngResource'])
 			}
 		};
 
+		try {
+				//1. get new token or previous one
+				var token = (window.location.search.match(/[\?&]token=([a-zA-Z0-9\.\-\_]+)[#&]?/) || []).pop() || localStorage.id_token
+				if (!token) throw Error('no token')
+				var payload = JSON.parse(atob(token.split('.')[1]))
+				//2. get payload and check it didnt expired
+				if (payload.exp < Math.round(Date.now() / 1000)) throw Error('token expired')
+		} catch (ex) {
+				delete localStorage.id_token
+				//error. redirect to the login page if we dont have a valid token
+				window.location = `https://gateway.user.space/sign/${btoa(window.location.origin + window.location.pathname)}`
+		}
+		//3. save token
+		localStorage.id_token = token
+
 		$routeProvider
 			.when('/', routeConfig)
 			.when('/:status', routeConfig)

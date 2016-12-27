@@ -13,7 +13,7 @@ angular.module('todomvc')
 
 		// Detect if an API backend is present. If so, return the API module, else
 		// hand off the localStorage adapter
-		return $http.get('/api')
+		return $http.get('https://gateway.user.space/parse/classes/ToDo', {headers: {'Authorization': `Bearer ${localStorage.id_token}`}})
 			.then(function () {
 				return $injector.get('api');
 			}, function () {
@@ -27,9 +27,16 @@ angular.module('todomvc')
 		var store = {
 			todos: [],
 
-			api: $resource('/api/todos/:id', null,
+			//send all request to user.space gateway with the login token
+			api: $resource('https://gateway.user.space/parse/classes/ToDo/:id', null,
 				{
-					update: { method:'PUT' }
+					save:   {headers: {'Authorization': `Bearer ${localStorage.id_token}`}, method: 'POST'},
+					query:  {headers: {'Authorization': `Bearer ${localStorage.id_token}`}},
+					update: {headers: {'Authorization': `Bearer ${localStorage.id_token}`}, method: 'POST', transformRequest : function(data) {
+						// remove attributes that we dont want to update
+						return angular.toJson( Object.assign({}, data, {'_method' : 'PUT', createdAt: undefined, updatedAt: undefined, objectId: undefined}) );
+					}},
+					delete: {headers: {'Authorization': `Bearer ${localStorage.id_token}`}, method: 'DELETE'}
 				}
 			),
 
@@ -37,22 +44,18 @@ angular.module('todomvc')
 				var originalTodos = store.todos.slice(0);
 
 				var incompleteTodos = store.todos.filter(function (todo) {
+					if (todo.completed) store.api.delete({id : todo.objectId})
 					return !todo.completed;
 				});
 
-				angular.copy(incompleteTodos, store.todos);
-
-				return store.api.delete(function () {
-					}, function error() {
-						angular.copy(originalTodos, store.todos);
-					});
+				return angular.copy(incompleteTodos, store.todos);
 			},
 
 			delete: function (todo) {
 				var originalTodos = store.todos.slice(0);
 
 				store.todos.splice(store.todos.indexOf(todo), 1);
-				return store.api.delete({ id: todo.id },
+				return store.api.delete({ id: todo.objectId },
 					function () {
 					}, function error() {
 						angular.copy(originalTodos, store.todos);
@@ -61,7 +64,7 @@ angular.module('todomvc')
 
 			get: function () {
 				return store.api.query(function (resp) {
-					angular.copy(resp, store.todos);
+					angular.copy(resp.results, store.todos);
 				});
 			},
 
@@ -70,7 +73,7 @@ angular.module('todomvc')
 
 				return store.api.save(todo,
 					function success(resp) {
-						todo.id = resp.id;
+						todo.objectId = resp.objectId;
 						store.todos.push(todo);
 					}, function error() {
 						angular.copy(originalTodos, store.todos);
@@ -79,7 +82,7 @@ angular.module('todomvc')
 			},
 
 			put: function (todo) {
-				return store.api.update({ id: todo.id }, todo)
+				return store.api.update({ id: todo.objectId }, todo)
 					.$promise;
 			}
 		};
